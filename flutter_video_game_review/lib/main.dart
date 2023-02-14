@@ -1,30 +1,61 @@
-import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
-import 'package:http/http.dart' as http;
+import 'dart:async';
+import 'dart:convert';
 
-void main() {
-  runApp(const MyApp());
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:fluttertoast/fluttertoast.dart';
+
+Future<List<Game>> fetchGames() async {
+  final response = await http.get(Uri.parse('http://127.0.0.1:8000/'));
+
+  if (response.statusCode == 200) {
+    var videogames = json.decode(response.body);
+    return videogames.map<Game>((v) => Game.fromJson(v)).toList();
+  } else {
+    throw Exception('Failed to load album');
+  }
 }
+
+class Game {
+  final int id;
+  final String title;
+  final String description;
+  final int releaseYear;
+  final int rating;
+  final String review;
+
+  const Game({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.releaseYear,
+    required this.rating,
+    required this.review,
+  });
+
+  factory Game.fromJson(Map<String, dynamic> json) {
+    return Game(
+      id: json['id'],
+      title: json['title'],
+      description: json['description'],
+      releaseYear: json['release_year'],
+      rating: json['rating'],
+      review: json['review'],
+    );
+  }
+}
+
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Video Game Review',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
         primarySwatch: Colors.blue,
         fontFamily: 'Roboto',
       ),
@@ -34,15 +65,23 @@ class MyApp extends StatelessWidget {
 }
 
 class MyAppHome extends StatefulWidget {
-  MyAppHome({key, this.title}) : super(key: key);
+  const MyAppHome({key, this.title}) : super(key: key);
 
   final title;
 
   @override
-  _MyAppHomeState createState() => _MyAppHomeState();
+  _MyAppState createState() => _MyAppState();
 }
 
-class _MyAppHomeState extends State<MyAppHome> {
+class _MyAppState extends State<MyAppHome> {
+  late Future<List<Game>> futureGames;
+
+  @override
+  void initState() {
+    super.initState();
+    futureGames = fetchGames();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,7 +95,27 @@ class _MyAppHomeState extends State<MyAppHome> {
               );
             })
       ]),
-      body: const Center(),
+      body: Center(
+          child: FutureBuilder<List<Game>>(
+              future: fetchGames(),
+              builder: (context, snapshot) {
+                var result;
+                if (snapshot.hasData && snapshot.data != null) {
+                  List<Game> games = snapshot.data!;
+                  result = Container(
+                      child: ListView.builder(
+                          itemCount: games.length,
+                          scrollDirection: Axis.vertical,
+                          itemBuilder: (BuildContext context, int index) {
+                            var gameData = games[index];
+                            return GameRow(gameData: gameData);
+                          }));
+                  // return Center(child: CircularProgressIndicator());
+                } else {
+                  result = Text('${snapshot.error}');
+                }
+                return result;
+              })),
       bottomNavigationBar: BottomAppBar(
           child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -97,5 +156,28 @@ class _MyAppHomeState extends State<MyAppHome> {
         title: Text('Create Account'),
       )
     ]));
+  }
+}
+
+class GameRow extends StatelessWidget {
+  const GameRow({
+    super.key,
+    required this.gameData,
+  });
+
+  final Game gameData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Row(
+        children: [
+          Text(gameData.title),
+          Spacer(),
+          Text(gameData.rating.toString()),
+        ],
+      ),
+    );
   }
 }
